@@ -1,62 +1,124 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
-class Program
+namespace SillasMusicales
 {
-    static void Main()
+    class Program
     {
-
-        ManualResetEvent gate = new ManualResetEvent(false);
-
-        Console.Write("Ingrese la cantidad de jugadores: ");
-
-        int jugadores = int.Parse(Console.ReadLine());
-
-        int numberOfThreads = jugadores, pending = numberOfThreads;
-
-        Thread[] threads = new Thread[numberOfThreads];
-
-        ParameterizedThreadStart work = name =>
+        private static readonly Random random = new Random();
+        private static readonly object syncLock = new object();
+        public static int RandomNumber(int[] auxArray)
         {
-            Console.WriteLine("Jugador {0} se acerca a la ronda", name);
-            if (Interlocked.Decrement(ref pending) == 0)
+            int[] posicionesLibres = auxArray.Select((z, j) => j).Where(i => auxArray[i] == 0).OrderBy(x => Guid.NewGuid()).ToArray();
+            lock (syncLock)
             {
-
-                Console.WriteLine("Suena la musica y arranca el juego!");
-                gate.Set();
-                Console.WriteLine("Se para la musica, todos a las sillas!");
-
+                int auxRandom = posicionesLibres[0];
+                return auxRandom;
             }
-            else gate.WaitOne();
-            
-            Race();
-            
-            Console.WriteLine("{0} Toma una silla", name);
-        };
-        
-        for (int i = 0; i < numberOfThreads; i++)
-        {
-            threads[i] = new Thread(work);
-            threads[i].Start(i);
         }
-        for (int i = 0; i < numberOfThreads; i++)
+        static void Main(string[] args)
         {
-            threads[i].Join();
-        }
-        Console.WriteLine("Juego Finalizado");
-        Console.ReadLine();
-    }
+            Console.WriteLine("Bienvenido al juego de las sillas musicales");
+            Console.WriteLine();
+            Console.Write("Ingrese la cantidad de jugadores: ");
+            
+            
+                int jugadores = int.Parse(Console.ReadLine());
 
-    static readonly Random rand = new Random();
-    
-    static void Race()
-    {
-        int time;
-        lock (rand)
-        {
-            time = rand.Next(500, 1000);
+                int cantidadSillas = jugadores - 1;
+                int[] sillas = new int[cantidadSillas];
+                Task[] tasks = new Task[jugadores];
+                Barrier barrier = new Barrier(jugadores);
+                int corteMusica = 0;
+
+                Action<object> actionJugadores = (object identificador) =>
+                {
+                    int bandera = 0;
+                    int banderaSentado = 0;
+
+                    while (true)
+                    {
+                        if (bandera == 0)
+                        {
+                            Console.WriteLine("El Jugador {0} se acerca a la ronda.", identificador);
+                            bandera = 1;
+                            barrier.SignalAndWait();
+                           
+                        }
+                        else
+                        {
+                            if (corteMusica == 1)
+                            {
+                                while (corteMusica == 1)
+                                {
+                                    while (banderaSentado == 0)
+                                    {
+                                        int posicionSilla = RandomNumber(sillas);
+                                        if (Array.Exists(sillas, element => element == 0))
+                                        {
+                                            if (sillas[posicionSilla] == 0)
+                                            {
+                                                lock (sillas)
+                                                {
+                                                    if (sillas[posicionSilla] == 0)
+                                                    {
+                                                        sillas[posicionSilla] = 1;
+                                                        Console.WriteLine("El jugador {0} toma una silla", posicionSilla);
+                                                        banderaSentado = 1;
+                                                    }
+                                                }
+                                            }
+
+                                        }
+                                        else
+                                        {
+                                            banderaSentado = 1;
+                                        }
+                                    }
+                                }
+                                banderaSentado = 0;
+                                barrier.SignalAndWait();
+                            }
+                        }
+                    }
+
+                };
+                
+                for (int i = 0; i < jugadores; i++)
+                {
+                    tasks[i] = Task.Factory.StartNew(actionJugadores, (i + 1));
+                }
+
+            while (cantidadSillas >= 1)
+            {
+                
+
+                    int tiempoMusica = new Random().Next(1, 5);
+                    Thread.Sleep(tiempoMusica * 1000);
+                    Console.WriteLine("Se detiene la musica! Todos a las sillas!");
+                    corteMusica = 1;
+                    while (Array.Exists(sillas, element => element == 0))
+                    {
+                        //Waiting??
+                    }
+                    
+                    corteMusica = 0;
+                    jugadores--;
+                    cantidadSillas--;
+                    sillas = new int[cantidadSillas];
+                    barrier.RemoveParticipant();
+                    //Remove one barrier participant
+                    
+                
+            }
+            Console.Write("Participante Ganador ^");
+            Console.ReadLine();
         }
-        Thread.Sleep(time);
+            
     }
-    
 }
+
